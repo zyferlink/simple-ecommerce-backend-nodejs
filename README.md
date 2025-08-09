@@ -1,4 +1,4 @@
-# E-Commerce — Stage 1: Project Setup (TypeScript + Express)
+## E-Commerce — Stage 1: Project Setup (TypeScript + Express)
 
 ---
 
@@ -56,13 +56,13 @@ Add these to the `"scripts"` section of `package.json`:
 }
 ```
 
-* `npm run dev` — development server with hot reload.
-* `npm run build` — compiles TypeScript to `dist/`.
-* `npm start` — runs compiled production code.
+* `npm run dev` — development server with hot reload
+* `npm run build` — compiles TypeScript to `dist/`
+* `npm start` — runs compiled production code
 
 ---
 
-## Recommended `tsconfig.json` (minimal, production ready)
+## Recommended `tsconfig.json` 
 
 Open `tsconfig.json` and ensure these options (add/adjust):
 
@@ -94,7 +94,9 @@ Open `tsconfig.json` and ensure these options (add/adjust):
 
 ---
 
-## Node/Dev runner configuration (optional)
+<br/>
+
+### Node/Dev runner configuration (optional)
 
 **nodemon.json** (if you choose `nodemon` + `ts-node`):
 
@@ -108,26 +110,26 @@ Open `tsconfig.json` and ensure these options (add/adjust):
 
 Alternatively, use the `ts-node-dev` script shown above — it's simpler and faster for TypeScript.
 
+<br/>
+
 ---
 
 ## Minimal `src/index.ts` (typed, middleware included)
 
 ```ts
-import express, { Request, Response } from "express";
+import express, { Express, Request, Response } from "express";
 
-const app = express();
+const app: Express = express();
 
-// JSON body parser middleware
-app.use(express.json());
-
-app.get("/", (_req: Request, res: Response) => {
-  res.send("App working");
+app.get("/", (request: Request, response: Response) => {
+  response.send("App working");
 });
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 app.listen(PORT, () => {
-  console.log(`App running at http://localhost:${PORT}`);
+   console.log(`App running at http://localhost:${PORT}`);
 });
+
 ```
 
 ---
@@ -153,7 +155,7 @@ e-commerce-backend/
 
 ---
 
-## .gitignore (suggested)
+## .gitignore (check project file)
 
 ```
 node_modules/
@@ -178,25 +180,8 @@ Use a library like `dotenv` (optional) or your deployment environment to load en
 
 ---
 
-## Type safety & code quality (recommended later steps)
+<br/>
 
-When you're ready, add:
-
-* ESLint + TypeScript rules
-* Prettier for formatting
-* Husky + lint-staged for pre-commit checks
-
-Install example packages when needed:
-
-```bash
-npm install -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin prettier eslint-config-prettier eslint-plugin-prettier
-```
-
----
-
-
-
----
 ---
 
 ## 🚀 How to Start & Check if Working
@@ -210,15 +195,15 @@ npm run dev
 
 Open your browser and visit `http://localhost:3000` → You should see:
 
-```
-App working
-```
+
+> App working
+
 
 ---
 
 ## 📦 (Optional) Build & Production
 
-1. `npm run build` → compiles TypeScript to `dist/`.
+1. `npm run build` → compiles TypeScript to `dist/`
 2. Deploy the `dist/` folder and run:
 
    ```bash
