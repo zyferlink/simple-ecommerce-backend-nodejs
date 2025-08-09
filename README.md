@@ -1,217 +1,116 @@
-## E-Commerce — Stage 1: Project Setup (TypeScript + Express)
+## Stage 2 – Prisma & Environment Variables Setup
 
----
-
-## Project summary
-
-A minimal starter for an e-commerce backend using TypeScript and Express.
-Goals for Stage 1: initialize the repo, configure TypeScript, add Express, enable fast dev reloads, and establish a clean folder structure.
-
----
-
-## Prerequisites
-
-* Node.js (v16+ recommended)
-* npm (v8+ recommended)
-* Git (optional but recommended)
-
----
-
-## Quick setup (copy & paste)
+## 1️⃣ Install Prisma & Client
 
 ```bash
-# create project folder
-mkdir e-commerce-backend
-cd e-commerce-backend
-
-# initialize npm (use -y to accept defaults)
-npm init -y
-
-# install runtime and dev dependencies
-npm install express
-npm install -D typescript ts-node ts-node-dev nodemon @types/node @types/express
-
-# initialize TypeScript config
-npx tsc --init
+npm install prisma @prisma/client
 ```
 
-> Notes:
->
-> * `ts-node-dev` provides fast reloading for TypeScript during development (preferred). If you prefer `nodemon + ts-node`, that also works.
-> * `@types/node` and `@types/express` are development dependencies that provide type definitions.
+## 2️⃣ Initialize Prisma
+
+```bash
+npx prisma init
+```
+
+* This will creates a `prisma/` folder with `schema.prisma`.
+* Generates `.env` file (already `.gitignore`d).
 
 ---
 
-## Recommended `package.json` scripts
+## 3️⃣ Configure Database
 
-Add these to the `"scripts"` section of `package.json`:
+* In `.env` → set `DATABASE_URL` for **MySQL**:
 
-```json
-"scripts": {
-  "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-  "build": "tsc -p .",
-  "start": "node dist/index.js",
-  "lint": "eslint . --ext .ts",
-  "format": "prettier --write ."
+  ```
+  DATABASE_URL="mysql://root:password@localhost:3306/ecommerce_db"
+  ```
+* In `prisma/schema.prisma`:
+
+  ```prisma
+  datasource db {
+    provider = "mysql"
+    url      = env("DATABASE_URL")
+  }
+  ```
+* Update database name (`ecommerce_db`) as needed.
+
+---
+
+## 4️⃣ Create First Model
+
+Example `User` model:
+
+```prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
 }
 ```
 
-* `npm run dev` — development server with hot reload
-* `npm run build` — compiles TypeScript to `dist/`
-* `npm start` — runs compiled production code
+---
+
+## 5️⃣ Run Migration
+
+```bash
+npx prisma migrate dev --name create_users_table
+```
+
+* Verifies DB connection.
+* Creates the table in MySQL.
 
 ---
 
-## Recommended `tsconfig.json` 
+## 6️⃣ Set Up Environment Variables for Node.js
 
-Open `tsconfig.json` and ensure these options (add/adjust):
+1. Install `dotenv`:
 
-```json
-{
-  "compilerOptions": {
-    "module": "CommonJS",
-    "target": "ES2016",
-    "noImplicitAny": true,
-    "removeComments": true,
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "rootDir": "./src",
-    "outDir": "./dist",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"]
-    }
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"]
-}
- 
-```
+   ```bash
+   npm install dotenv
+   ```
+2. Create `src/secrets.ts`:
 
-`outDir` and `rootDir` are important for a predictable build output.
+   ```ts
+   import dotenv from "dotenv";
+   dotenv.config({ path: ".env" });
+
+   export const PORT = process.env.PORT || 3000;
+   export const DATABASE_URL = process.env.DATABASE_URL || "";
+   ```
+3. Use in `src/index.ts`:
+
+   ```ts
+   import { PORT } from "./secrets";
+   app.listen(PORT, () => {
+     console.log(`Server running on http://localhost:${PORT}`);
+   });
+   ```
 
 ---
 
-<br/>
+## 7️⃣ Environment Variables Template
 
-### Node/Dev runner configuration (optional)
 
-**nodemon.json** (if you choose `nodemon` + `ts-node`):
-
-```json
-{
-  "watch": ["src"],
-  "ext": "ts,js,json",
-  "exec": "npx ts-node ./src/index.ts"
-}
-```
-
-Alternatively, use the `ts-node-dev` script shown above — it's simpler and faster for TypeScript.
-
-<br/>
+  ```
+  PORT=3000
+  DATABASE_URL="mysql://root:password@localhost:3306/ecommerce_db"
+  ```
+* **Developers** copy `.env.test` → `.env` and set your own values.
 
 ---
 
-## Minimal `src/index.ts` (typed, middleware included)
-
-```ts
-import express, { Express, Request, Response } from "express";
-
-const app: Express = express();
-
-app.get("/", (request: Request, response: Response) => {
-  response.send("App working");
-});
-
-const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
-app.listen(PORT, () => {
-   console.log(`App running at http://localhost:${PORT}`);
-});
-
-```
-
----
-
-## Folder structure (standard)
-
-```
-e-commerce-backend/
-├─ package.json
-├─ tsconfig.json
-├─ nodemon.json         # optional
-├─ .env                 # environment variables (do not commit)
-├─ .gitignore
-└─ src/
-   ├─ index.ts
-   ├─ controllers/
-   ├─ routes/
-   ├─ middlewares/
-   ├─ exceptions/
-   ├─ schemas/         
-   └─ services/
-```
-
----
-
-## .gitignore (check project file)
-
-```
-node_modules/
-dist/
-.env
-*.log
-.vscode/
-```
-
----
-
-## Environment variables
-
-Create a `.env` file for configuration (do **not** commit it). Example:
-
-```
-PORT=3000
-DATABASE_URL=postgres://user:pass@localhost:5432/dbname
-```
-
-Use a library like `dotenv` (optional) or your deployment environment to load env vars.
-
----
-
-<br/>
-
----
-
-## 🚀 How to Start & Check if Working
+## 8️⃣ Verify Setup
 
 ```bash
 npm run dev
 ```
 
-* Starts the server in development mode with hot reload.
-* By default runs at: [http://localhost:3000](http://localhost:3000)
-
-Open your browser and visit `http://localhost:3000` → You should see:
-
-
-> App working
-
-
----
-
-## 📦 (Optional) Build & Production
-
-1. `npm run build` → compiles TypeScript to `dist/`
-2. Deploy the `dist/` folder and run:
-
-   ```bash
-   npm start
-   ```
-
-   or use a process manager like **PM2**.
-3. Ensure environment variables (e.g., DB credentials, API keys) are set in your hosting environment.
+* Visit: [http://localhost:3000](http://localhost:3000) → should respond with `"App working"`.
 
 ---
 
