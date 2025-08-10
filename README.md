@@ -1,116 +1,152 @@
-## Stage 2 – Prisma & Environment Variables Setup
+# Stage 3 – Routes Setup (Signup & Login)
 
-## 1️⃣ Install Prisma & Client
+## 1. Create Auth Routes
 
-```bash
-npm install prisma @prisma/client
-```
-
-## 2️⃣ Initialize Prisma
-
-```bash
-npx prisma init
-```
-
-* This will creates a `prisma/` folder with `schema.prisma`.
-* Generates `.env` file (already `.gitignore`d).
-
----
-
-## 3️⃣ Configure Database
-
-* In `.env` → set `DATABASE_URL` for **MySQL**:
-
-  ```
-  DATABASE_URL="mysql://root:password@localhost:3306/ecommerce_db"
-  ```
-* In `prisma/schema.prisma`:
-
-  ```prisma
-  datasource db {
-    provider = "mysql"
-    url      = env("DATABASE_URL")
-  }
-  ```
-* Update database name (`ecommerce_db`) as needed.
-
----
-
-## 4️⃣ Create First Model
-
-Example `User` model:
-
-```prisma
-model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("users")
-}
-```
-
----
-
-## 5️⃣ Run Migration
-
-```bash
-npx prisma migrate dev --name create_users_table
-```
-
-* Verifies DB connection.
-* Creates the table in MySQL.
-
----
-
-## 6️⃣ Set Up Environment Variables for Node.js
-
-1. Install `dotenv`:
-
-   ```bash
-   npm install dotenv
-   ```
-2. Create `src/secrets.ts`:
+1. Inside `routes/`, create files `auth.ts` & `index.ts`
+2. Import `Router` from Express.
+3. Create a router instance:
 
    ```ts
-   import dotenv from "dotenv";
-   dotenv.config({ path: ".env" });
-
-   export const PORT = process.env.PORT || 3000;
-   export const DATABASE_URL = process.env.DATABASE_URL || "";
+   const authRoutes = Router();
    ```
-3. Use in `src/index.ts`:
+4. Add route placeholders for **login** and **signup** (controllers will be linked later).
+
+
+**View auth.ts** &nbsp;|&nbsp;  [ open auth.ts -> ](./src/routes/auth.ts)
+
+<br/>
+
+**View index.ts** &nbsp;|&nbsp;  [ open index.ts -> ](./src/routes/index.ts)
+
+---
+
+## 2. Create Controllers
+
+1. Inside `controllers/`, create `auth.ts`.
+2. Export controller functions:
+
+   * `logIn` (POST)
+   * `signUp` (POST)
+3. Add request/response types:
 
    ```ts
-   import { PORT } from "./secrets";
-   app.listen(PORT, () => {
-     console.log(`Server running on http://localhost:${PORT}`);
-   });
+   import { Request, Response } from "express";
    ```
 
----
-
-## 7️⃣ Environment Variables Template
-
-
-  ```
-  PORT=3000
-  DATABASE_URL="mysql://root:password@localhost:3306/ecommerce_db"
-  ```
-* **Developers** copy `.env.test` → `.env` and set your own values.
+**View auth.ts** &nbsp;|&nbsp;  [ open auth.ts -> ](./src/controllers/auth.ts)
 
 ---
 
-## 8️⃣ Verify Setup
+## 3. Combine Routes
+
+1. In `routes/index.ts`:
+
+   * Import Express Router
+   * Create a `rootRouter`
+   * Use `rootRouter.use('/auth', authRoutes)`
+   * Export `rootRouter`
+
+---
+
+## 4. Use Routes in Main App
+
+1. In `index.ts` (main server file):
+
+   * Enable JSON middleware:
+
+     ```ts
+     app.use(express.json());
+     ```
+   * Use `rootRouter` with a prefix:
+
+     ```ts
+     app.use('/api', rootRouter);
+     ```
+
+**View index.ts** &nbsp;|&nbsp;  [ open index.ts -> ](./src/index.ts)
+
+---
+
+## 5. Initialize Prisma Client
+
+1. Import and create Prisma client in `prisma.ts`:
+
+   ```ts
+   import { PrismaClient } from "@prisma/client";
+   export const prisma = new PrismaClient({ log: ["query"] });
+   ```
+2. Export it for use in controllers.
+
+**View index.ts** &nbsp;|&nbsp;  [ open index.ts -> ](./src/index.ts)
+
+---
+
+## 6. Install Required Packages
 
 ```bash
-npm run dev
+npm install bcrypt jsonwebtoken
+npm install -D @types/bcrypt @types/jsonwebtoken
 ```
-
-* Visit: [http://localhost:3000](http://localhost:3000) → should respond with `"App working"`.
 
 ---
 
+## 7. Signup Logic
+
+1. Destructure `name`, `email`, `password` from `req.body`.
+2. Check if the user already exists:
+
+   ```ts
+   const user = await prisma.user.findFirst({ where: { email } });
+   ```
+3. If exists → throw error `"User already exists"`.
+4. If not → hash password:
+
+   ```ts
+   const hashedPassword = bcrypt.hashSync(password, 10);
+   ```
+5. Create user in DB and return response **without** password.
+
+**View auth.ts** &nbsp;|&nbsp;  [ open auth.ts -> ](./src/routes/auth.ts)
+
+---
+
+## 8. Login Logic
+
+1. Destructure `email`, `password` from `req.body`.
+2. Find user by email → if not found, throw `"User does not exist"`.
+3. Compare passwords:
+
+   ```ts
+   const isMatch = bcrypt.compareSync(password, user.password);
+   if (!isMatch) throw new Error("Incorrect password");
+   ```
+4. Generate JWT token:
+
+   ```ts
+   const token = jwt.sign({ userId: user.id }, JWT_SECRET!);
+   ```
+5. Return user data **without password** + token.
+
+**View auth.ts** &nbsp;|&nbsp;  [ open auth.ts -> ](./src/routes/auth.ts)
+
+---
+
+## 9. Environment Variables (`.env`)
+
+```
+JWT_SECRET=your_random_secret
+```
+
+---
+
+## 10. Testing in Postman
+
+1. Create collection `e-commerce-backend`.
+2. Add:
+
+   * **POST** `/api/auth/signup` (Body: name, email, password)
+   * **POST** `/api/auth/login` (Body: email, password)
+3. Check hashed password in DB.
+4. Use returned JWT in Authorization header for protected routes.
+
+---
