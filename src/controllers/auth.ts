@@ -56,3 +56,8 @@ export const logIn = async (request: Request, response: Response) => {
 
   response.json({ user, token });
 };
+
+
+export const getCurrentUser = async (request: Request, response: Response) => {
+  response.json(request.user);
+};
