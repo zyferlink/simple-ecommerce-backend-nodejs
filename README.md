@@ -1,569 +1,295 @@
-## Stage 05 - Auth Middleware Implementation Guide
-
-## Overview
-
-This guide demonstrates how to create an authentication middleware that protects API routes using JWT tokens. The middleware will extract user information from JWT tokens sent in request headers and make it available to protected routes.
-
-## Prerequisites
-
-- Express.js application setup
-- Prisma ORM configured
-- JWT (jsonwebtoken) library installed
-- Environment variables configured with JWT_SECRET
-
-## Step 1: Create Unauthorized Exception
-
-First, create a custom exception class to handle unauthorized access attempts.
+# Stage 06: Address Table Implementation
 
 
-**View file** &nbsp;|&nbsp;  [ open -> exceptions/unauthorized.ts  ](./src/exceptions/unauthorized.ts)
 
-<br/>
-
-## Step 2: Extend Express Request Type
-
-Create type definitions to extend the Express Request object with a user property.
-
-**View file** &nbsp;|&nbsp;  [ open -> types/express.d.ts  ](./src/types/express.d.ts)
-
-<br/>
-
-## Step 3: Implement Auth Middleware
-
-Create the main authentication middleware with these key steps:
-
-### Step 3.1: Extract Token from Headers
-
-```typescript
-// middleware/auth.ts
-import * as JWT from 'jsonwebtoken';
-import { Request, Response, NextFunction } from 'express';
-import { UnauthorizedException } from '../exceptions/UnauthorizedException';
-import { prismaClient } from '../lib/prisma';
-
-export const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
-  // Step 1: Extract token from authorization header
-  const token = req.headers.authorization;
-}
-```
-
-### Step 3.2: Validate Token Presence
-
-```typescript
-// Step 2: Check if token is present
-if (!token) {
-  return next(new UnauthorizedException("Unauthorized", "UNAUTHORIZED"));
-}
-```
-
-### Step 3.3: Verify Token and Extract Payload
-
-```typescript
-try {
-  // Step 3: Verify token and extract payload
-  const payload = JWT.verify(token, process.env.JWT_SECRET!) as any;
-  
-  // Step 4: Get user from payload
-  const user = await prismaClient.user.findFirst({
-    where: {
-      id: payload.userId
-    }
-  });
-
-  // Check if user exists
-  if (!user) {
-    return next(new UnauthorizedException("Unauthorized", "UNAUTHORIZED"));
-  }
-
-  // Step 5: Attach user to request object
-  req.user = user;
-  
-  // Continue to next middleware/controller
-  next();
-  
-} catch (error) {
-  // Token is malformed or invalid
-  return next(new UnauthorizedException("Unauthorized", "UNAUTHORIZED"));
-}
-```
-
-<br/>
-
-**View file** &nbsp;|&nbsp;  [ open -> middleware/auth.ts  ](./src/middlewares/auth.ts)
-
-<br/>
-
-## Step 4: Create Protected Controller
-
-Create a "getCurrentUser" controller that returns the current logged-in user information.
-
-```typescript
-// controllers/auth.ts
-import { Request, Response } from 'express';
-
-export const getCurrentUser = (req: Request, res: Response) => {
-  // User is available from middleware
-  res.json(req.user);
-};
-```
-
-## Step 5: Define Protected Routes
-
-Set up routes that use the auth middleware.
-
-```typescript
-// routes/auth.ts
-import { Router } from 'express';
-import { authMiddleware } from '../middleware/auth';
-import { getCurrentUser } from '../controllers/authController';
-import { errorHandler } from '../middleware/errorHandler';
-
-const router = Router();
-
-router.get('/current-user', authMiddleware, errorHandler(getCurrentUser));
-
-export default router;
-```
-
-### Authentication Flow
-
-1. **Token Extraction**: Middleware extracts JWT token from `authorization` header
-2. **Token Validation**: Verifies token signature and expiration using JWT_SECRET
-3. **Payload Extraction**: Extracts user information (userId) from token payload
-4. **User Lookup**: Queries database to fetch complete user information
-5. **Request Enhancement**: Attaches user object to request for use in controllers
-6. **Route Protection**: Only authenticated users can access protected routes
-
-### Error Handling
-
-The middleware handles several error scenarios:
-- Missing authorization header
-- Invalid or malformed JWT tokens
-- Expired tokens
-- User not found in database
-- Database connection errors
-
-### Security Considerations
-
-- Always use HTTPS in production to protect tokens in transit
-- Set appropriate JWT expiration times
-- Consider implementing token refresh mechanisms
-- Store JWT_SECRET securely using environment variables
-- Validate token payload structure
+This stage implements a complete address management system for users in an e-commerce application. The implementation includes database modeling, CRUD operations, authentication integration, and default address management.
 
 
-<br/>
 
-##
+### Step 1: Database Model Setup
 
-## Role-Based Access Control (RBAC) Extension
-
-### Step 7: Adding Role Support to User Model
-
-To implement role-based access control, first extend your Prisma user model with role support.
-
-#### 7.1: Create Role Enum in Prisma Schema
+Create the Address model in your Prisma schema:
 
 ```prisma
-// schema.prisma
-enum Role {
-  ADMIN
-  USER
+model Address {
+  id       Int    @id @default(autoincrement())
+  line1    String
+  line2    String?
+  city     String
+  country  String
+  zipCode  String
+  userId   Int
+  user     User   @relation(fields: [userId], references: [id])
+  
+  @@map("addresses")
 }
 
 model User {
-  id       Int    @id @default(autoincrement())
-  email    String @unique
-  password String
-  role     Role   @default(USER)
-  // ... other fields
-}
-```
-
-#### 7.2: Generate Migration
-
-```bash
-npx prisma migrate dev --name add_roles_to_user
-```
-
-#### 7.3: Update User Roles via Prisma Studio
-
-1. Start Prisma Studio:
-```bash
-npx prisma studio
-```
-
-2. Navigate to `http://localhost:5555`
-3. Open the User model
-4. Edit any user record and change role from `USER` to `ADMIN`
-5. Save the changes
-
-### Step 8: Implement Role-Based Middleware
-
-Create middleware to check user roles for specific operations.
-
-```typescript
-// middleware/admin.ts
-import { Request, Response, NextFunction } from 'express';
-import { UnauthorizedException } from '../exceptions/UnauthorizedException';
-import { Role } from '@prisma/client';
-
-export const adminMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  // Assumes authMiddleware has already run and attached user to request
-  if (!req.user) {
-    return next(new UnauthorizedException("Authentication required", "UNAUTHORIZED"));
-  }
-
-  // Check if user has admin role
-  if (req.user.role !== Role.ADMIN) {
-    return next(new UnauthorizedException("Admin access required", "FORBIDDEN"));
-  }
-
-  // User is admin, continue to next middleware/controller
-  next();
-};
-```
-
-### Step 9: Generic Role Checker Middleware
-
-For more flexibility, create a generic role checker:
-
-**Optional**
-
-```typescript
-// middleware/roleMiddleware.ts
-import { Request, Response, NextFunction } from 'express';
-import { UnauthorizedException } from '../exceptions/UnauthorizedException';
-import { Role } from '@prisma/client';
-
-export const requireRole = (allowedRoles: Role[]) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user) {
-      return next(new UnauthorizedException("Authentication required", "UNAUTHORIZED"));
-    }
-
-    if (!allowedRoles.includes(req.user.role)) {
-      return next(new UnauthorizedException(`Access denied. Required roles: ${allowedRoles.join(', ')}`, "FORBIDDEN"));
-    }
-
-    next();
-  };
-};
-```
-
-### Step 10: Usage Examples
-
-#### Protecting Admin-Only Routes
-
-```typescript
-// routes/productRoutes.ts
-import { Router } from 'express';
-import { authMiddleware } from '../middleware/auth';
-import { adminMiddleware } from '../middleware/adminMiddleware';
-import { createProduct, updateProduct } from '../controllers/productController';
-import { errorHandler } from '../middleware/errorHandler';
-
-const router = Router();
-
-// Only admins can create products
-router.post('/products', 
-  authMiddleware, 
-  adminMiddleware, 
-  errorHandler(createProduct)
-);
-
-// Only admins can update products
-router.put('/products/:id', 
-  authMiddleware, 
-  adminMiddleware, 
-  errorHandler(updateProduct)
-);
-
-export default router;
-```
-
-
-
-## Common Issues and Solutions
-
-### TypeScript Errors
-- Ensure proper type definitions for Express Request extension
-- Use `as any` temporarily for JWT payload if strict typing causes issues
-
-### Token Format
-- Ensure frontend sends token in correct header format
-- Consider supporting both `Bearer token` and direct token formats
-
-### Database Queries
-- Optimize user lookup queries with appropriate indexes
-- Consider caching user information for better performance
-
-### Role Management
-- Implement proper role assignment workflows
-- Consider role inheritance and permission cascading
-- Audit role changes for security compliance
-
-## Product CRUD Operations with Role-Based Access
-
-### Step 11: Product Model Schema
-
-First, update your Prisma schema to include a Product model with proper field types:
-
-```prisma
-// schema.prisma
-model Product {
-  id          Int      @id @default(autoincrement())
-  name        String
-  description String   @db.Text  // Required for MySQL to allow unlimited characters
-  price       Float
-  tags        String?  // Comma-separated values
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                     Int       @id @default(autoincrement())
+  // ... existing fields
+  addresses              Address[]
+  defaultShippingAddressId Int?
+  defaultBillingAddressId  Int?
   
-  @@map("products")
+  @@map("users")
 }
 ```
 
-**Note**: The `@db.Text` annotation is specifically required for MySQL to handle unlimited characters. PostgreSQL treats regular `String` as text by default.
-
-### Step 12: Product Controllers Implementation
-
-#### 12.1: Update Product Controller
-
-```typescript
-// controllers/productController.ts
-import { Request, Response } from 'express';
-import { prismaClient } from '../lib/prisma';
-import { NotFoundException } from '../exceptions/NotFoundException';
-import { ErrorCode } from '../exceptions/ErrorCode';
-
-export const updateProduct = async (req: Request, res: Response) => {
-  try {
-    const product = req.body;
-    
-    // Convert tags array to comma-separated string if provided
-    if (product.tags) {
-      product.tags = product.tags.join(',');
-    }
-    
-    const updatedProduct = await prismaClient.product.update({
-      where: {
-        id: +req.params.id  // Type cast string to number
-      },
-      data: product
-    });
-    
-    res.json(updatedProduct);
-    
-  } catch (error) {
-    throw new NotFoundException("Product not found", ErrorCode.PRODUCT_NOT_FOUND);
-  }
-};
+Run migration:
+```bash
+npx prisma migrate dev --name "add_addresses_table"
 ```
 
-#### 12.2: Delete Product Controller (Assignment)
+### Step 2: Validation Schema
+
+Create validation schemas using Zod:
 
 ```typescript
-export const deleteProduct = async (req: Request, res: Response) => {
+// users.ts
+export const addressSchema = z.object({
+  line1: z.string(),
+  line2: z.string().nullable(),
+  zipCode: z.string(),
+  country: z.string(),
+  city: z.string()
+});
+
+export const updateUserSchema = z.object({
+  name: z.string().optional(),
+  defaultShippingAddressId: z.number().optional(),
+  defaultBillingAddressId: z.number().optional()
+});
+```
+
+### Step 3: Controller Implementation
+
+#### Add Address Controller
+```typescript
+export const addAddress = async (req: Request, res: Response) => {
   try {
-    const deletedProduct = await prismaClient.product.delete({
-      where: {
-        id: +req.params.id
+    const validatedData = addressSchema.parse(req.body);
+    
+    const address = await prismaClient.address.create({
+      data: {
+        ...validatedData,
+        userId: req.user.id
       }
     });
     
-    res.json({ message: "Product deleted successfully", product: deletedProduct });
-    
+    res.json(address);
   } catch (error) {
-    throw new NotFoundException("Product not found", ErrorCode.PRODUCT_NOT_FOUND);
+    // Handle validation errors
   }
 };
 ```
 
-#### 12.3: List Products with Pagination
-
+#### List Addresses Controller
 ```typescript
-export const listProducts = async (req: Request, res: Response) => {
-  // Get total count for pagination
-  const count = await prismaClient.product.count();
-  
-  // Get paginated products
-  const products = await prismaClient.product.findMany({
-    skip: req.query.skip ? +req.query.skip : 0,  // Type cast to number, default 0
-    take: 5  // Hard-coded limit controlled by backend
+export const listAddresses = async (req: Request, res: Response) => {
+  const addresses = await prismaClient.address.findMany({
+    where: {
+      userId: req.user.id
+    }
   });
   
-  res.json({
-    count,
-    data: products
-  });
+  res.json(addresses);
 };
 ```
 
-#### 12.4: Get Product by ID
-
+#### Delete Address Controller
 ```typescript
-export const getProductById = async (req: Request, res: Response) => {
+export const deleteAddress = async (req: Request, res: Response) => {
   try {
-    const product = await prismaClient.product.findFirstOrThrow({
+    await prismaClient.address.delete({
       where: {
-        id: +req.params.id
+        id: parseInt(req.params.id)
       }
     });
     
-    res.json(product);
-    
+    res.status(200).json({ success: true });
   } catch (error) {
-    throw new NotFoundException("Product not found", ErrorCode.PRODUCT_NOT_FOUND);
+    throw new NotFoundException("Address not found");
   }
 };
 ```
 
-#### 12.5: Create Product Controller (Admin Only)
-
+#### Update User Controller
 ```typescript
-export const createProduct = async (req: Request, res: Response) => {
-  const product = req.body;
+export const updateUser = async (req: Request, res: Response) => {
+  const validatedData = updateUserSchema.parse(req.body);
   
-  // Convert tags array to comma-separated string if provided
-  if (product.tags) {
-    product.tags = product.tags.join(',');
+  // Validate shipping address ownership
+  if (validatedData.defaultShippingAddress) {
+    const shippingAddress = await prismaClient.address.findFirstOrThrow({
+      where: { id: validatedData.defaultShippingAddress }
+    });
+    
+    if (shippingAddress.userId !== req.user.id) {
+      throw new BadRequestException("Address does not belong to user");
+    }
   }
   
-  const newProduct = await prismaClient.product.create({
-    data: product
+  // Similar validation for billing address
+  
+  const updatedUser = await prismaClient.user.update({
+    where: { id: req.user.id },
+    data: validatedData
   });
   
-  res.json(newProduct);
+  res.json(updatedUser);
 };
 ```
 
-### Step 13: Product Routes with Role Protection
+### Step 4: Route Configuration
 
 ```typescript
-// routes/productRoutes.ts
-import { Router } from 'express';
-import { authMiddleware } from '../middleware/auth';
-import { adminMiddleware } from '../middleware/adminMiddleware';
-import { 
-  createProduct, 
-  updateProduct, 
-  deleteProduct, 
-  listProducts, 
-  getProductById 
-} from '../controllers/productController';
-import { errorHandler } from '../middleware/errorHandler';
+// routes/users.ts
+import { authMiddleware } from '../middlewares/auth';
 
-const productsRouters = Router();
-
-// Public routes (no authentication required)
-productsRouters.get('/products', errorHandler(listProducts));           // GET /products
-productsRouters.get('/products/:id', errorHandler(getProductById));    // GET /products/:id
-
-// Admin-only routes (authentication + admin role required)
-productsRouters.post('/products', 
-  authMiddleware, 
-  adminMiddleware, 
-  errorHandler(createProduct)
-);                                                             // POST /products
-
-productsRouters.put('/products/:id', 
-  authMiddleware, 
-  adminMiddleware, 
-  errorHandler(updateProduct)
-);                                                             // PUT /products/:id
-
-productsRouters.delete('/products/:id', 
-  authMiddleware, 
-  adminMiddleware, 
-  errorHandler(deleteProduct)
-);                                                             // DELETE /products/:id
-
-export default productsRouters;
+router.post('/address', authMiddleware, addAddress);
+router.get('/address', authMiddleware, listAddresses);
+router.delete('/address/:id', authMiddleware, deleteAddress);
+router.put('/', authMiddleware, updateUser);
 ```
 
-### Step 14: Exception Handling
+## API Reference
 
-Create a NotFoundException for product-related errors:
+### Endpoints
 
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| POST | `/users/address` | Create new address | Yes |
+| GET | `/users/address` | List user addresses | Yes |
+| DELETE | `/users/address/:id` | Delete address | Yes |
+| PUT | `/users` | Update user profile | Yes |
+
+### Request/Response Examples
+
+#### Create Address
+**Request:**
+```json
+POST /users/address
+{
+  "line1": "C 6/671",
+  "line2": "Parking Road",
+  "city": "Delhi",
+  "country": "India",
+  "pinCode": "110001"
+}
+```
+
+**Response:**
+```json
+{
+  "id": 1,
+  "line1": "C 6/671",
+  "line2": "Parking Road",
+  "city": "Delhi",
+  "country": "India",
+  "pinCode": "110001",
+  "userId": 8
+}
+```
+
+#### Update User with Default Addresses
+**Request:**
+```json
+PUT /users
+{
+  "name": "John Doe",
+  "defaultShippingAddress": 1,
+  "defaultBillingAddress": 2
+}
+```
+
+## Database Schema
+
+### Relationships
+- **User → Address**: One-to-Many
+- **User → DefaultShippingAddress**: One-to-One (nullable)
+- **User → DefaultBillingAddress**: One-to-One (nullable)
+
+### Constraints
+- `pinCode`: Must be exactly 6 characters
+- `line1`, `city`, `country`: Required fields
+- `line2`: Optional field
+- Address ownership validation enforced in application layer
+
+## Error Handling
+
+### Error Codes
 ```typescript
-// exceptions/not-found.ts
-export class NotFoundException extends HttpException {
-  constructor(message: string, errorCode: ErrorCode) {
-    super(message, errorCode, 404, null);
-  }
+enum ErrorCode {
+  USER_NOT_FOUND = 1001,
+  ADDRESS_NOT_FOUND = 1004,
+  ADDRESS_DOES_NOT_BELONG = 1005
 }
-
 ```
 
-### Step 15: API Testing Examples
+### Exception Types
+- `NotFoundException`: User/Address not found
+- `BadRequestException`: Address ownership violation
+- `ValidationException`: Zod schema validation failures
 
-#### Using Postman
-
-**1. Create Product (Admin Only)**
-```
-POST /products
-Headers: 
-  authorization: your_admin_jwt_token
-  Content-Type: application/json
-Body:
+### Error Response Format
+```json
 {
-  "name": "Sample Product",
-  "description": "Product description",
-  "price": 99.99,
-  "tags": ["electronics", "gadgets"]
+  "message": "Address not found",
+  "errorCode": 1004,
+  "details": {}
 }
 ```
 
-**2. Update Product (Admin Only)**
+## Testing
+
+### Test Cases
+
+#### Unit Tests
+- ✅ Address creation with valid data
+- ✅ Address creation with invalid pin code
+- ✅ Address deletion by owner
+- ✅ Address deletion by non-owner (should fail)
+- ✅ Default address assignment validation
+
+#### Integration Tests
+- ✅ Full CRUD flow for addresses
+- ✅ Authentication middleware integration
+- ✅ Database transaction handling
+
+
+
+## Best Practices
+
+### Security
+- Always validate address ownership before operations
+- Use authentication middleware for all endpoints
+- Sanitize user input through Zod schemas
+
+### Performance
+- No pagination needed for addresses (limited per user)
+- Index on `userId` for efficient queries
+- Use `findFirstOrThrow` for better error handling
+
+### Code Organization
+- Separate validation schemas in dedicated file
+- Group related controllers in modules
+- Consistent error handling patterns
+
+## Migration Commands
+
+```bash
+# Initial address table
+npx prisma migrate dev --name "add_addresses_table"
+
+# Add default address fields
+npx prisma migrate dev --name "add_default_addresses"
+
+# Reset database (development only)
+npx prisma migrate reset
 ```
-PUT /products/46
-Headers: 
-  authorization: your_admin_jwt_token
-  Content-Type: application/json
-Body:
-{
-  "price": 100
-}
-```
 
-**3. List Products (Public)**
-```
-GET /products?skip=5
-```
-
-**4. Get Product by ID (Public)**
-```
-GET /products/50
-```
-
-**5. Delete Product (Admin Only)**
-```
-DELETE /products/46
-Headers: 
-  authorization: your_admin_jwt_token
-```
-
-### Pagination Details
-
-The pagination system works as follows:
-- **skip**: Number of records to skip (for page offset)
-- **take**: Number of records to return (hard-coded to 5)
-- **count**: Total number of products (for frontend pagination logic)
-
-**Examples:**
-- Page 1: `skip=0` (or omit skip parameter)
-- Page 2: `skip=5`
-- Page 3: `skip=10`
-
-### Data Transformation Notes
-
-**Tags Handling:**
-- Frontend sends: `["electronics", "gadgets"]`
-- Backend stores: `"electronics,gadgets"`
-- This allows flexible tag management while maintaining simple string storage
-
-**Type Casting:**
-- URL parameters (`req.params.id`) are always strings
-- Database expects numbers for ID fields
-- Use `+req.params.id` or `parseInt(req.params.id)` for conversion
+## Next Steps
+- Implement cart functionality
+- Add address validation with external APIs
+- Implement bulk address operations
+- Add address analytics and reporting
