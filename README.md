@@ -1,155 +1,170 @@
-# Stage 06: Address Table Implementation
+# Stage 07: Cart Implementation
 
 
+This stage implements a complete shopping cart system for the e-commerce application. Users can add products to their cart, modify quantities, remove items, and view their cart contents.
 
-This stage implements a complete address management system for users in an e-commerce application. The implementation includes database modeling, CRUD operations, authentication integration, and default address management.
+### Features
+- Add products to cart with specified quantities
+- Update item quantities in cart
+- Remove items from cart
+- View all cart items with product details
+- User-specific cart isolation
+- Product existence validation
 
 
 
 ### Step 1: Database Model Setup
 
-Create the Address model in your Prisma schema:
+Create the CartItem model in your Prisma schema:
 
 ```prisma
-model Address {
-  id       Int    @id @default(autoincrement())
-  line1    String
-  line2    String?
-  city     String
-  country  String
-  zipCode  String
-  userId   Int
-  user     User   @relation(fields: [userId], references: [id])
+model CartItem {
+  id        Int     @id @default(autoincrement())
+  userId    Int
+  productId Int
+  quantity  Int
+  user      User    @relation(fields: [userId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
   
-  @@map("addresses")
+  @@map("cart_items")
 }
 
 model User {
-  id                     Int       @id @default(autoincrement())
+  id        Int        @id @default(autoincrement())
   // ... existing fields
-  addresses              Address[]
-  defaultShippingAddressId Int?
-  defaultBillingAddressId  Int?
+  cartItems CartItem[]
   
   @@map("users")
+}
+
+model Product {
+  id        Int        @id @default(autoincrement())
+  // ... existing fields
+  cartItems CartItem[]
+  
+  @@map("products")
 }
 ```
 
 Run migration:
 ```bash
-npx prisma migrate dev --name "add_addresses_table"
+npx prisma migrate dev --name "create_cart_table"
 ```
 
-### Step 2: Validation Schema
+### Step 2: Validation Schemas
 
-Create validation schemas using Zod:
+Create validation schemas for cart operations:
 
 ```typescript
-// users.ts
-export const addressSchema = z.object({
-  line1: z.string(),
-  line2: z.string().nullable(),
-  zipCode: z.string(),
-  country: z.string(),
-  city: z.string()
+// cart.ts
+import { z } from 'zod';
+
+export const createCartSchema = z.object({
+  productId: z.number(),
+  quantity: z.number()
 });
 
-export const updateUserSchema = z.object({
-  name: z.string().optional(),
-  defaultShippingAddressId: z.number().optional(),
-  defaultBillingAddressId: z.number().optional()
+export const changeQuantitySchema = z.object({
+  quantity: z.number()
 });
 ```
 
 ### Step 3: Controller Implementation
 
-#### Add Address Controller
+#### Add Item to Cart Controller
 ```typescript
-export const addAddress = async (req: Request, res: Response) => {
+export const addItemToCart = async (req: Request, res: Response) => {
   try {
-    const validatedData = addressSchema.parse(req.body);
+    const validatedData = createCartSchema.parse(req.body);
     
-    const address = await prismaClient.address.create({
+    // Fetch product to ensure it exists
+    const product = await prismaClient.product.findFirstOrThrow({
+      where: { id: validatedData.productId }
+    });
+    
+    const cart = await prismaClient.cartItem.create({
       data: {
-        ...validatedData,
-        userId: req.user.id
+        userId: req.user.id,
+        productId: product.id,
+        quantity: validatedData.quantity
       }
     });
     
-    res.json(address);
+    res.json(cart);
   } catch (error) {
-    // Handle validation errors
+    throw new NotFoundException("Product not found");
   }
 };
 ```
 
-#### List Addresses Controller
+#### Delete Item from Cart Controller
 ```typescript
-export const listAddresses = async (req: Request, res: Response) => {
-  const addresses = await prismaClient.address.findMany({
+export const deleteItemFromCart = async (req: Request, res: Response) => {
+  await prismaClient.cartItem.delete({
+    where: {
+      id: parseInt(req.params.id)
+    }
+  });
+  
+  res.json({ success: true });
+};
+```
+
+#### Change Quantity Controller
+```typescript
+export const changeQuantity = async (req: Request, res: Response) => {
+  const validatedData = changeQuantitySchema.parse(req.body);
+  
+  const updatedCart = await prismaClient.cartItem.update({
+    where: {
+      id: parseInt(req.params.id)
+    },
+    data: {
+      quantity: validatedData.quantity
+    }
+  });
+  
+  res.json(updatedCart);
+};
+```
+
+#### Get Cart Controller
+```typescript
+export const getCart = async (req: Request, res: Response) => {
+  const cart = await prismaClient.cartItem.findMany({
     where: {
       userId: req.user.id
+    },
+    include: {
+      product: true
     }
   });
   
-  res.json(addresses);
-};
-```
-
-#### Delete Address Controller
-```typescript
-export const deleteAddress = async (req: Request, res: Response) => {
-  try {
-    await prismaClient.address.delete({
-      where: {
-        id: parseInt(req.params.id)
-      }
-    });
-    
-    res.status(200).json({ success: true });
-  } catch (error) {
-    throw new NotFoundException("Address not found");
-  }
-};
-```
-
-#### Update User Controller
-```typescript
-export const updateUser = async (req: Request, res: Response) => {
-  const validatedData = updateUserSchema.parse(req.body);
-  
-  // Validate shipping address ownership
-  if (validatedData.defaultShippingAddress) {
-    const shippingAddress = await prismaClient.address.findFirstOrThrow({
-      where: { id: validatedData.defaultShippingAddress }
-    });
-    
-    if (shippingAddress.userId !== req.user.id) {
-      throw new BadRequestException("Address does not belong to user");
-    }
-  }
-  
-  // Similar validation for billing address
-  
-  const updatedUser = await prismaClient.user.update({
-    where: { id: req.user.id },
-    data: validatedData
-  });
-  
-  res.json(updatedUser);
+  res.json(cart);
 };
 ```
 
 ### Step 4: Route Configuration
 
 ```typescript
-// routes/users.ts
+// routes/cart.ts
+import { Router } from 'express';
 import { authMiddleware } from '../middlewares/auth';
+import {
+  addItemToCart,
+  deleteItemFromCart,
+  changeQuantity,
+  getCart
+} from '../controllers/cart';
 
-router.post('/address', authMiddleware, addAddress);
-router.get('/address', authMiddleware, listAddresses);
-router.delete('/address/:id', authMiddleware, deleteAddress);
-router.put('/', authMiddleware, updateUser);
+const router = Router();
+
+router.post('/', authMiddleware, addItemToCart);
+router.get('/', authMiddleware, getCart);
+router.put('/:id', authMiddleware, changeQuantity);
+router.delete('/:id', authMiddleware, deleteItemFromCart);
+
+export default router;
 ```
 
 ## API Reference
@@ -158,138 +173,201 @@ router.put('/', authMiddleware, updateUser);
 
 | Method | Endpoint | Description | Auth Required |
 |--------|----------|-------------|---------------|
-| POST | `/users/address` | Create new address | Yes |
-| GET | `/users/address` | List user addresses | Yes |
-| DELETE | `/users/address/:id` | Delete address | Yes |
-| PUT | `/users` | Update user profile | Yes |
+| POST | `/cart` | Add item to cart | Yes |
+| GET | `/cart` | Get user's cart items | Yes |
+| PUT | `/cart/:id` | Update item quantity | Yes |
+| DELETE | `/cart/:id` | Remove item from cart | Yes |
 
 ### Request/Response Examples
 
-#### Create Address
+#### Add Item to Cart
 **Request:**
 ```json
-POST /users/address
+POST /cart
 {
-  "line1": "C 6/671",
-  "line2": "Parking Road",
-  "city": "Delhi",
-  "country": "India",
-  "pinCode": "110001"
+  "productId": 1,
+  "quantity": 2
 }
 ```
 
 **Response:**
 ```json
 {
-  "id": 1,
-  "line1": "C 6/671",
-  "line2": "Parking Road",
-  "city": "Delhi",
-  "country": "India",
-  "pinCode": "110001",
-  "userId": 8
+  "id": 46,
+  "userId": 8,
+  "productId": 1,
+  "quantity": 2
 }
 ```
 
-#### Update User with Default Addresses
+#### Get Cart Items
 **Request:**
 ```json
-PUT /users
+GET /cart
+```
+
+**Response:**
+```json
+[
+  {
+    "id": 46,
+    "userId": 8,
+    "productId": 1,
+    "quantity": 2,
+    "product": {
+      "id": 1,
+      "name": "Product Name",
+      "price": 99.99,
+      "description": "Product description"
+    }
+  }
+]
+```
+
+#### Update Quantity
+**Request:**
+```json
+PUT /cart/46
 {
-  "name": "John Doe",
-  "defaultShippingAddress": 1,
-  "defaultBillingAddress": 2
+  "quantity": 6
+}
+```
+
+**Response:**
+```json
+{
+  "id": 46,
+  "userId": 8,
+  "productId": 1,
+  "quantity": 6
+}
+```
+
+#### Delete Cart Item
+**Request:**
+```json
+DELETE /cart/46
+```
+
+**Response:**
+```json
+{
+  "success": true
 }
 ```
 
 ## Database Schema
 
 ### Relationships
-- **User → Address**: One-to-Many
-- **User → DefaultShippingAddress**: One-to-One (nullable)
-- **User → DefaultBillingAddress**: One-to-One (nullable)
+- **User → CartItem**: One-to-Many
+- **Product → CartItem**: One-to-Many
+- **CartItem → User**: Many-to-One
+- **CartItem → Product**: Many-to-One
 
 ### Constraints
-- `pinCode`: Must be exactly 6 characters
-- `line1`, `city`, `country`: Required fields
-- `line2`: Optional field
-- Address ownership validation enforced in application layer
+- `quantity`: Must be a positive integer
+- `productId`: Must reference existing product
+- `userId`: Automatically set from authenticated user
 
 ## Error Handling
 
 ### Error Codes
 ```typescript
 enum ErrorCode {
-  USER_NOT_FOUND = 1001,
-  ADDRESS_NOT_FOUND = 1004,
-  ADDRESS_DOES_NOT_BELONG = 1005
+  PRODUCT_NOT_FOUND = 2001,
+  CART_ITEM_NOT_FOUND = 2002,
+  UNAUTHORIZED_CART_ACCESS = 2003
 }
 ```
 
 ### Exception Types
-- `NotFoundException`: User/Address not found
-- `BadRequestException`: Address ownership violation
-- `ValidationException`: Zod schema validation failures
+- `NotFoundException`: Product/Cart item not found
+- `UnauthorizedException`: User accessing another user's cart
+- `ValidationException`: Invalid quantity or product ID
 
 ### Error Response Format
 ```json
 {
-  "message": "Address not found",
-  "errorCode": 1004,
+  "message": "Product not found",
+  "errorCode": 2001,
   "details": {}
 }
 ```
 
-## Testing
+## Assignments
 
-### Test Cases
+### Assignment 1: Cart Item Ownership Validation
+**Requirement:** Check if user is deleting/updating their own cart item.
 
-#### Unit Tests
-- ✅ Address creation with valid data
-- ✅ Address creation with invalid pin code
-- ✅ Address deletion by owner
-- ✅ Address deletion by non-owner (should fail)
-- ✅ Default address assignment validation
+**Implementation:**
+```typescript
+// In deleteItemFromCart and changeQuantity controllers
+const cartItem = await prismaClient.cartItem.findFirstOrThrow({
+  where: { id: parseInt(req.params.id) }
+});
 
-#### Integration Tests
-- ✅ Full CRUD flow for addresses
-- ✅ Authentication middleware integration
-- ✅ Database transaction handling
+if (cartItem.userId !== req.user.id) {
+  throw new UnauthorizedException("Cannot modify another user's cart item");
+}
+```
 
+### Assignment 2: Duplicate Product Handling
+**Requirement:** If product already exists in cart, increase quantity instead of creating new item.
+
+**Implementation:**
+```typescript
+// In addItemToCart controller
+const existingCartItem = await prismaClient.cartItem.findFirst({
+  where: {
+    userId: req.user.id,
+    productId: validatedData.productId
+  }
+});
+
+if (existingCartItem) {
+  const updatedCart = await prismaClient.cartItem.update({
+    where: { id: existingCartItem.id },
+    data: {
+      quantity: existingCartItem.quantity + validatedData.quantity
+    }
+  });
+  return res.json(updatedCart);
+}
+
+// Continue with creating new cart item...
+```
 
 
 ## Best Practices
 
 ### Security
-- Always validate address ownership before operations
+- Always validate cart item ownership
 - Use authentication middleware for all endpoints
-- Sanitize user input through Zod schemas
+- Validate product existence before adding to cart
 
 ### Performance
-- No pagination needed for addresses (limited per user)
-- Index on `userId` for efficient queries
-- Use `findFirstOrThrow` for better error handling
+- Use `include` to fetch related data in single query
+- Consider adding indexes on `userId` and `productId`
+- Implement cart cleanup for abandoned items
 
-### Code Organization
-- Separate validation schemas in dedicated file
-- Group related controllers in modules
-- Consistent error handling patterns
+### Business Logic
+- Handle duplicate products intelligently
+- Validate quantity limits if applicable
+- Consider stock availability before adding to cart
 
-## Migration Commands
+## Common Issues & Solutions
 
+### Issue: Port conflicts during development
+**Solution:** Kill existing processes or use different port
 ```bash
-# Initial address table
-npx prisma migrate dev --name "add_addresses_table"
-
-# Add default address fields
-npx prisma migrate dev --name "add_default_addresses"
-
-# Reset database (development only)
-npx prisma migrate reset
+lsof -ti:3000 | xargs kill -9
 ```
 
-## Next Steps
-- Implement cart functionality
-- Add address validation with external APIs
-- Implement bulk address operations
-- Add address analytics and reporting
+### Issue: Cart items persisting after product deletion
+**Solution:** Add cascade delete or handle orphaned items
+```prisma
+product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+```
+
+### Issue: Race conditions in quantity updates
+**Solution:** Use database transactions for atomic operations
