@@ -91,3 +91,25 @@ export const getProductById = async (request: Request, response: Response) => {
     );
   }
 };
+
+export const searchProducts = async (request: Request, response: Response) => {
+  const { q } = request.query;
+
+  if (!q || q.toString().trim().length < 2) {
+    return response.json([]);
+  }
+
+  const query = q.toString();
+
+  const products = await prismaCilent.product.findMany({
+    where: {
+      OR: [
+        { name: { search: query } },
+        { description: { search: query } },
+        { tags: { search: query } },
+      ],
+    },
+  });
+
+  response.json(products);
+};

@@ -4,6 +4,7 @@ import {
   deleteProduct,
   getProductById,
   listProduct,
+  searchProducts,
   updateProduct,
 } from "../controllers/products";
 import { errorHandler } from "../error-handler";
@@ -41,5 +42,8 @@ productsRouters.get(
   [authMiddleware, adminMiddleware],
   errorHandler(getProductById)
 );
+
+
+productsRouters.get("/search", errorHandler(searchProducts));
 
 export default productsRouters;

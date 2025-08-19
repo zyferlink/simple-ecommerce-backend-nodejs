@@ -111,3 +111,49 @@ export const updateUser = async (request: Request, response: Response) => {
   });
   response.json(updatedUser);
 };
+
+export const listUsers = async (request: Request, response: Response) => {
+  const querySkip = Number(request.query.skip) || 0;
+  const users = await prismaCilent.user.findMany({
+    skip: querySkip,
+    take: 5,
+  });
+  response.json(users);
+};
+
+export const getUserById = async (request: Request, response: Response) => {
+  try {
+    const user = await prismaCilent.user.findFirstOrThrow({
+      where: {
+        id: parseInt(request.params.id),
+      },
+      include: {
+        addresses: true,
+      },
+    });
+    response.json(user);
+
+  } catch (error) {
+    throw new NotFoundException("User not found!", ErrorCode.USER_NOT_FOUND);
+  }
+};
+
+export const changeUserRole = async (
+  request: Request,
+  response: Response
+) => {
+  try {
+    const user = await prismaCilent.user.update({
+      where: {
+        id: parseInt(request.params.id),
+      },
+      data:{
+        role: request.body.role
+      }
+    });
+    response.json(user);
+    
+  } catch (error) {
+    throw new NotFoundException("User not found!", ErrorCode.USER_NOT_FOUND);
+  }
+};
