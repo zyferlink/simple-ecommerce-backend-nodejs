@@ -7,7 +7,7 @@ import {
   searchProducts,
   updateProduct,
 } from "../controllers/products";
-import { errorHandler } from "../error-handler";
+import { errorHandler } from "../lib/error-handler";
 import { Router } from "express";
 import adminMiddleware from "../middlewares/admin";
 

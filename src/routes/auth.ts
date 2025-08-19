@@ -1,4 +1,4 @@
-import { errorHandler } from "../error-handler";
+import { errorHandler } from "../lib/error-handler";
 import { getCurrentUser, logIn, signUp } from "../controllers/auth";
 import { Router } from "express";
 import authMiddleware from "../middlewares/auth";

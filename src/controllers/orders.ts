@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { prismaCilent } from "..";
+import { prismaCilent } from "../lib/prisma";
 import { NotFoundException } from "../exceptions/not-found";
 import { ErrorCode } from "../exceptions/root";
 

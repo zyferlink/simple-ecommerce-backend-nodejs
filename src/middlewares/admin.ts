@@ -1,9 +1,6 @@
 import { ErrorCode } from "../exceptions/root";
 import { UnauthorizedException } from "../exceptions/unauthorized";
 import { NextFunction, Request, Response } from "express";
-import * as jsonwebtoken from "jsonwebtoken";
-import { JWT_SECRET } from "../secrets";
-import { prismaCilent } from "..";
 
 const adminMiddleware = async (
   request: Request,

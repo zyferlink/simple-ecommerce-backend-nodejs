@@ -1,7 +1,7 @@
-import { ErrorCode, HttpException } from "../exceptions/root";
+import { HttpException } from "../exceptions/root";
 import { NextFunction, Request, Response, ErrorRequestHandler } from "express";
 
-export const errorMiddleware: ErrorRequestHandler = (
+export const errorMiddleware: ErrorRequestHandler  = (
   error: HttpException,
   request: Request,
   response: Response,

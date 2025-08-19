@@ -1,5 +1,5 @@
 import authMiddleware from "../middlewares/auth";
-import { errorHandler } from "../error-handler";
+import { errorHandler } from "../lib/error-handler";
 import { Router } from "express";
 import { addItemToCart, changeQuantity, deleteItemFromCart, getCart } from "../controllers/cart";
 

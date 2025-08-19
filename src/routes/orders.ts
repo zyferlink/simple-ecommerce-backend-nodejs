@@ -1,5 +1,5 @@
 import authMiddleware from "../middlewares/auth";
-import { errorHandler } from "../error-handler";
+import { errorHandler } from "../lib/error-handler";
 import { Router } from "express";
 import { cancelOrder, changeStatus, createOrder, getOrderById, listAllOrders, listOrders, listUserOrders } from "../controllers/orders";
 import adminMiddleware from "../middlewares/admin";

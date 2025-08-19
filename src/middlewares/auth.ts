@@ -2,10 +2,10 @@ import { ErrorCode } from "../exceptions/root";
 import { UnauthorizedException } from "../exceptions/unauthorized";
 import { NextFunction, Request, Response } from "express";
 import * as jsonwebtoken from "jsonwebtoken";
-import { JWT_SECRET } from "../secrets";
-import { prismaCilent } from "..";
+import { JWT_SECRET } from "../config/secrets";
+import { prismaCilent } from "../lib/prisma";
 
-const authMiddleware = async (
+const authMiddleware= async (
   request: Request,
   response: Response,
   next: NextFunction

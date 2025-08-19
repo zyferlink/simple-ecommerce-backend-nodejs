@@ -1,40 +1,43 @@
-import express, { Express, Request, Response } from "express";
-import { PORT } from "./secrets";
-import rootRouter from "./routes";
-import { PrismaClient } from "@prisma/client";
-import { errorMiddleware } from "./middlewares/errors";
-import { SignUpSchema } from "./schemas/users";
+import { NODE_ENV, PORT } from "./config/secrets";
+import { prismaCilent } from "./lib/prisma";
+import { logSeparator } from "./lib/log-separator";
+import app from "./app";
 
-const app: Express = express();
+export const SIGNALS = {
+  INTERRUPT: "SIGINT",
+  TERMINATE: "SIGTERM",
+} as const;
 
-app.use(express.json());
+async function startServer() {
+  try {
+    logSeparator("SERVER START");
 
-app.use("/api", rootRouter);
+    await prismaCilent.$connect();
+    console.log(`☑ Database connected | ☑  Working environment : ${NODE_ENV} \n`);
+    
 
-app.use(errorMiddleware);
+    const server = app.listen(PORT, () => {
+      console.log(`Local: http://localhost:${PORT}/api`);
+      console.log(`Health check: http://localhost:${PORT}/health`);
+      logSeparator("SERVER RUNNING");
+    });
 
-export const prismaCilent = new PrismaClient({ log: ["query"] }).$extends({
-  result: {
-    address: {
-      formattedAddress: {
-        needs: {
-          lineOne: true,
-          lineTwo: true,
-          city: true,
-          country: true,
-          zipcode: true,
-        },
-        compute: (address) => {
-          if (address.lineTwo)
-            return `${address.lineOne}, ${address.lineTwo}, ${address.city}, ${address.country}-${address.zipcode}`;
-          else
-            return `${address.lineOne}, ${address.city}, ${address.country}-${address.zipcode}`;
-        },
-      },
-    },
-  },
-});
+    const shutdownServer = async (signal: string) => {
+      console.log(`${signal} received. Shutting down server...`);
+      logSeparator("SERVER STOPPED");
+      server.close(async () => {
+        await prismaCilent.$disconnect();
+        process.exit(0);
+      });
+    };
 
-app.listen(PORT, () => {
-  console.log(`App running at http://localhost:${PORT}/api`);
-});
+    process.on(SIGNALS.INTERRUPT, () => shutdownServer(SIGNALS.INTERRUPT));
+    process.on(SIGNALS.TERMINATE, () => shutdownServer(SIGNALS.TERMINATE));
+
+  } catch (error) {
+    console.error("Failed to start server:", error);
+    process.exit(1);
+  }
+}
+
+startServer();

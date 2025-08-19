@@ -1,9 +1,9 @@
 import { ErrorCode } from "../exceptions/root";
 import { NotFoundException } from "../exceptions/not-found";
 import { ChangeQuantitySchema, CreateCartSchema } from "../schemas/cart";
-import { Request, Response } from "express";
+import { NextFunction, Request, RequestHandler, Response } from "express";
 import { Product } from "@prisma/client";
-import { prismaCilent } from "..";
+import { prismaCilent } from "../lib/prisma";
 import { ca } from "zod/v4/locales/index.cjs";
 import { success } from "zod";
 
@@ -80,20 +80,20 @@ export const deleteItemFromCart = async (
   }
 };
 
-export const changeQuantity = async (request: Request, response: Response) => {
-  const validatedData = ChangeQuantitySchema.parse(request.body);
+export const changeQuantity= async (req: Request, res: Response): Promise<any> => {
+  const validatedData = ChangeQuantitySchema.parse(req.body);
 
   const updatedCart = await prismaCilent.cartItem.update({
     where: {
-      id: parseInt(request.params.id),
-     userId: request.user.id,
+      id: parseInt(req.params.id),
+     userId: req.user.id,
     },
     data: {
       quantity: validatedData.quantity,
     },
   });
 
-  response.json({ cartUpdated: true, updatedCart });
+  res.json({ cartUpdated: true, updatedCart });
 };
 
 export const getCart = async (request: Request, response: Response) => {

@@ -3,7 +3,7 @@ import { NotFoundException } from "../exceptions/not-found";
 import { ErrorCode } from "../exceptions/root";
 import { AddressSchema, UpdateUserSchema } from "../schemas/users";
 import { Request, Response } from "express";
-import { prismaCilent } from "..";
+import { prismaCilent } from "../lib/prisma";
 import { BadRequestException } from "../exceptions/bad-request";
 
 export const addAddress = async (request: Request, response: Response) => {
